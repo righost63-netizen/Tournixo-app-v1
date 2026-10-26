@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" data-page="verifyEmail">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Verify Email — Tournixo</title>
+    <link rel="stylesheet" href="../styles/global.css">
+    <link rel="stylesheet" href="../styles/pages/login.css">
+</head>
+<body>
+<div id="app" class="page-wrapper">
+
+    <div class="auth-page">
+        <div class="auth-card" style="text-align:center;">
+
+            <!-- Icon -->
+            <div style="font-size:64px; margin-bottom:16px; line-height:1;">📧</div>
+
+            <!-- Title -->
+            <h1 style="font-size:22px; font-weight:800; color:var(--text); margin-bottom:8px;">
+                Check Your Email
+            </h1>
+
+            <!-- Subtitle -->
+            <p style="font-size:14px; color:var(--text2); line-height:1.6; margin-bottom:6px;">
+                আমরা একটা verification link পাঠিয়েছি:
+            </p>
+            <div id="ve-email-display" style="font-size:14px; font-weight:700; color:var(--accent); margin-bottom:20px; word-break:break-all;"></div>
+
+            <!-- Steps -->
+            <div style="background:var(--bg3); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:24px; text-align:left;">
+                <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:12px;">
+                    <span style="font-size:20px; flex-shrink:0;">1️⃣</span>
+                    <div style="font-size:13px; color:var(--text2); line-height:1.5;">তোমার email inbox খোলো</div>
+                </div>
+                <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:12px;">
+                    <span style="font-size:20px; flex-shrink:0;">2️⃣</span>
+                    <div style="font-size:13px; color:var(--text2); line-height:1.5;"><b style="color:var(--text);">Tournixo</b> থেকে আসা email টা খোলো। Spam/Junk folder ও চেক করো।</div>
+                </div>
+                <div style="display:flex; align-items:flex-start; gap:12px;">
+                    <span style="font-size:20px; flex-shrink:0;">3️⃣</span>
+                    <div style="font-size:13px; color:var(--text2); line-height:1.5;"><b style="color:var(--text);">"Verify Email"</b> বাটনে ক্লিক করো, তারপর এখানে ফিরে এসে Sign In করো।</div>
+                </div>
+            </div>
+
+            <!-- Already verified → Go to login -->
+            <button
+                class="btn btn-primary"
+                style="width:100%; min-height:50px; font-size:15px; font-weight:800; margin-bottom:12px;"
+                onclick="window.goToLogin()">
+                ✅ Verified করেছি — Sign In করব
+            </button>
+
+            <!-- Resend -->
+            <button
+                id="ve-resend-btn"
+                class="btn btn-secondary"
+                style="width:100%; min-height:46px; font-size:14px;"
+                onclick="window.veResend()">
+                🔁 Resend Verification Email
+            </button>
+
+            <p style="font-size:12px; color:var(--text3); margin-top:20px; line-height:1.5;">
+                ভুল email দিয়ে account খুলেছ?<br>
+                <span id="ve-wrong-email" onclick="window.goToLogin()" style="color:var(--accent); cursor:pointer; font-weight:600;">নতুন account তৈরি করো</span>
+            </p>
+
+        </div>
+    </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+    import { showToast } from '../scripts/toast.js';
+    import { goReplace } from '../config/app-config.js';
+    import { resendVerificationEmail } from '../services/auth.service.js';
+
+    // Email display
+    let _email = '';
+    try { _email = sessionStorage.getItem('verify_email') || ''; } catch (_) {}
+    const emailEl = document.getElementById('ve-email-display');
+    if (emailEl) emailEl.textContent = _email || 'তোমার email address';
+
+    // Cooldown
+    const COOLDOWN = 60_000;
+    let _lastSent = 0;
+    let _timer = null;
+
+    function startCooldown(btn) {
+        if (_timer) clearInterval(_timer);
+        const tick = () => {
+            const left = Math.ceil((COOLDOWN - (Date.now() - _lastSent)) / 1000);
+            if (left <= 0) {
+                clearInterval(_timer); _timer = null;
+                btn.disabled = false;
+                btn.textContent = '🔁 Resend Verification Email';
+            } else {
+                btn.disabled = true;
+                btn.textContent = `Resend again in ${left}s`;
+            }
+        };
+        tick();
+        _timer = setInterval(tick, 1000);
+    }
+
+    window.goToLogin = () => {
+        try { sessionStorage.removeItem('verify_email'); } catch (_) {}
+        goReplace('login');
+    };
+
+    window.veResend = async () => {
+        if (!_email) { showToast('Email পাওয়া যায়নি — আবার register করো', 'error'); return; }
+
+        // Password নেওয়া দরকার resend-এর জন্য
+        let pass = prompt('নিশ্চিত করতে password দাও:');
+        if (!pass) return;
+
+        const btn = document.getElementById('ve-resend-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+        try {
+            await resendVerificationEmail(_email, pass);
+            _lastSent = Date.now();
+            showToast('Verification link পাঠানো হয়েছে ✅ Spam folder ও চেক করো।', 'success', 5000);
+            if (btn) startCooldown(btn);
+        } catch (e) {
+            if (btn) { btn.disabled = false; btn.textContent = '🔁 Resend Verification Email'; }
+            const msgs = {
+                'auth/invalid-credential': 'Password ভুল',
+                'auth/wrong-password': 'Password ভুল',
+                'auth/too-many-requests': 'Too many attempts. একটু পরে চেষ্টা করো।',
+                'auth/email-already-verified': 'Email already verified ✅ — Sign in করো!'
+            };
+            showToast(msgs[e.code] || e.message, 'error', 4500);
+            if (e.code === 'auth/email-already-verified') goReplace('login');
+        }
+    };
+</script>
+</body>
+</html>

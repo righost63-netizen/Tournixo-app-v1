@@ -1,0 +1,9 @@
+.DS_Store
+*.keystore
+android.keystore
+.netlify/
+node_modules/
+dist/
+.env
+.env.local
+

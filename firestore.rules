@@ -1,0 +1,749 @@
+// ═══ firestore.rules v15 — ADMIN PANEL AUDIT FIX ROUND (2026-10-25) ═══
+// v15 = v14 + admin-panel audit fixes (BUILD 20, code evidence verified 2026-10-25):
+//  (a) roomCredentials read gains an isAdmin() branch — v14 denied admin reads,
+//      so the admin room sheet opened blank and a blank save could WIPE live
+//      credentials (money audit C2). Admin already had full write here; read
+//      adds no new privilege.
+//  (b) settings/staffPanel update gains an isAdmin() branch — v14 allowed only
+//      staff heartbeat updates, so the admin staff-panel toggle was DENIED once
+//      the doc existed (security H1 / dashboard H2).
+//  (c) NEW match /appConfig/{docId} — no rule existed in any version, so admin
+//      cache-bust writes (touchCache) were always denied AND the user app's
+//      cache sync read was denied, which could show users a false backend-
+//      failure dialog (dashboard H1). Doc holds only per-type timestamps.
+//  Everything else is v14 unchanged, including the AUD-001 veto (team create
+//  stays open) and the publicConfig rule. Deploy: paste + Publish AFTER any
+//  older rules; this file supersedes firestore-rules-v14-DEPLOY.txt.
+// ═══ firestore.rules v14 — USER PANEL AUDIT FIX ROUND (2026-10-25) ═══
+// v14 = v13 + user-panel audit fixes (code evidence verified 2026-10-25):
+//  (a) tournamentTeams create — REVERTED 2026-10-25 per owner veto:
+//      the narrowed shaped-create mitigation shipped in v14's first cut
+//      is REMOVED; the rule is back to v13's single-line open form
+//      (`allow create: if isSignedIn();`), exactly as the owner decided
+//      for AUD-001 on 2026-10-24 and reaffirmed 2026-10-25. Consequence
+//      stated plainly: forged team docs via direct SDK calls are possible
+//      again (the original AUD-001 exposure); the join transactions remain
+//      the only capacity/duplicate guard. Do NOT reintroduce shaping
+//      without the owner's fresh approval. The shapedTeamCreate() helper
+//      was deleted with this revert.
+//  (b) captain-lock + UID-lock rejoin branches (v13 DENIED rejoin after
+//      reject: reject leaves locks 'rejected', and the join txn's full-doc
+//      set matched neither the admin-only nor the expiry-sweep branch —
+//      now own-rejected → fresh pending/confirmed, and dead-team squat
+//      overwrite, are allowed narrowly).
+//  (c) staff walletBalance update is now DECREASE-ONLY (AUD-004 minimal
+//      form; staff approve only deducts — verify the staff panel has no
+//      balance-credit function before deploying).
+//  (d) walletTransactions update/delete admin-only (was admin/staff).
+//  (e) withdrawalRequests create enforces the settings/withdrawal minAmount
+//      (rules level, default ₹1 if the settings doc is missing).
+//  (f) teamName rename now requires lock unlocked + tournament upcoming.
+//  (g) legacy payment update requires OLD paymentStatus 'unpaid' (blocks
+//      rejected → pending resubmits at rules level).
+//  (h) captain-lock create constrains status to pending/confirmed.
+//  (i) resultPosts imageUrl, when present, must be https.
+//  (j) ban enforcement (security audit H4, 2026-10-25): isNotBanned()
+//      required on team create, payment create, withdrawal create, report
+//      create and the plain-user tournaments-counter branch (staff branch
+//      unchanged — a banned staff member is an admin role decision).
+//  (k) joinRequests create is now admin-only (security audit M6 — the
+//      user app never creates these docs; the legacy fallback display
+//      reads only, unchanged).
+//  (l) settings/payment read is now signed-in-only and settings/staffPanel
+//      read admin/staff-only (security audit L3; the user app never reads
+//      staffPanel, and payment settings are only read on the login-gated
+//      payment page).
+//  (m) settings/publicConfig rule ADDED (staff-push fix, caught in the
+//      final rules walk 2026-10-25 — v13 never contained it, same miss as
+//      v12): the staff panel reads oneSignalAppId ONLY from this doc with
+//      no fallback, so without this rule staff push stays 'not-configured'
+//      after a v14 Publish. Public read is safe — the App ID is already
+//      inside the client bundles; the REST key stays admin-only in
+//      settings/notifications.
+//  isAdmin() STILL without email_verified (admin email verified status
+//  unknown — adding it risks total admin lockout).
+//  RULES WALK (2026-10-25): every admin/staff/user write path in the user
+//  app, admin BUILD 19 and staff panel was re-checked against v14 before
+//  calling it final (the v12 publicConfig lesson). Console rules are the
+//  authority — embedded copies in app zips are reference only.
+// ═══ firestore.rules v13 — ADMIN PANEL BUILD 19 (2026-10-24) ═══
+// v13 = v12 + (a) NEW resultPosts collection (admin Result tool:
+// public read, admin-only write); (b) freedSlots on tournaments for
+// the slot-collision fix — user join may only SHRINK it (arrayRemove
+// of the slot it takes), never grow it; (c) roomCredentials comment
+// updated: admin publish NOW writes participantUids (AUD-002 fixed).
+// isAdmin() UNCHANGED on purpose: email_verified is NOT added yet —
+// the admin panel enforces verification in code (login guard), and
+// adding it to rules before the existing admin verifies would lock
+// the admin out completely. Add it only after the admin email is
+// verified (see BUILD 19 ship note).
+// ═══ firestore.rules v12 — AUDIT FIXES (User Panel picks, 2026-10-24) ═══
+// v12: paymentRequests owner-read + shaped create (AUD-003) · tournament
+// counter integrity guard (AUD-007) · captain-lock doc-ID binding +
+// owner-scoped reads for captains/joinRequests/teams (AUD-008/009) ·
+// registeredUIDs profile cross-check (AUD-018) · NEW withdrawalCounters
+// collection for the atomic pending caps (AUD-013). AUD-001
+// (tournamentTeams create) intentionally UNCHANGED per owner decision.
+// ═══ firestore.rules v11 — A1 HARDENED / DEPLOY THIS ONE ═══
+// Prepared 2026-10-07. Replaces firestore-rules-merged-DEPLOY-v9.txt.
+// v10.1 (2026-10-07): + leaderboard/{docId} rule for the daily published
+// leaderboard (v6.1 user app reads ONE doc per view instead of 50 user docs).
+// v10.2 (2026-10-08): + teams (v7 persistent My Team) + playerReports (v7).
+// v11 (2026-10-10): A1 hardening (Prompt 1, BUILD 18) —
+//   • settings wildcard read removed: settings/{docId} read:true also leaked
+//     settings/notifications (OneSignal REST key) to logged-out readers.
+//     Now explicit per-doc matches; notifications stays admin-only.
+//   • users create: owner-only, role != admin/staff, balances start at 0.
+//   • users owner-update allow-list: name/photoURL/joinedTournaments/
+//     updatedAt only (console balance self-edit now impossible).
+//   • users read: owner/admin/staff only (was any signed-in user).
+//   • walletTransactions create: admin/staff only (user app never writes
+//     ledger entries — verified by grep; it only reads its own history).
+//   • withdrawalRequests create: own uid, status 'pending', amount > 0,
+//     fixed key list, no resolvedAt.
+//   Rotate the OneSignal REST API key after deploying this file.
+// v10.3 (2026-10-09): users/{uid}/notifications read now also allows
+// admin/staff — Delete User (and the user-detail view) lists the inbox
+// before deleting; owner-only read made the whole delete fail with
+// permission-denied.
+//
+// WHAT CHANGED vs v9 (and why v9 could NOT be deployed as-is):
+// ────────────────────────────────────────────────────────────────
+// ❌ v9 set tournamentCaptains / tournamentPlayerUIDs / tournaments /
+//    tournamentTeams writes to admin-only. But the user app's join
+//    transaction RUNS AS THE SIGNED-IN USER and must:
+//      • get()   tournamentPlayerUIDs/{tid_uid}      (duplicate-UID check)
+//      • set()   tournamentCaptains/{tid_uid}        (captain lock)
+//      • set()   tournamentPlayerUIDs/{tid_uid}      (UID locks)
+//      • update() tournaments/{tid} counters         (seat reservation)
+//    → with v9, EVERY join (free + paid) failed with permission-denied.
+// ❌ v9 set tournamentTeams update = admin-only → the payment-submit
+//    transaction (team → paymentStatus 'pending') failed too, and the
+//    Matches "Edit Name" button could never work.
+// ❌ v9 set users/{uid}/notifications write = admin/staff-only → the app's
+//    own inbox writes (tournament reminders, "payment submitted" note) and
+//    mark-as-read ALWAYS failed.
+// ✅ v10 fixes all of the above with tightly constrained user writes
+//    (field allow-lists, owner checks, ±1 counter steps, time-bound expiry).
+// ✅ v10 adds the pending-team auto-expiry rules (expiresAt).
+// ✅ v10 hardens roomCredentials with forward-compatible participantUids.
+// Kept from v9: adminActivityLogs admin-only, staff heartbeat.
+// (v11 removes the relaxed users-read and the public settings wildcard.)
+//
+// Deploy: Firebase Console → Firestore Database → Rules ট্যাবে পুরোটা
+// পেস্ট করে Publish. (Test in the console Rules Playground if unsure.)
+// ════════════════════════════════════════════════════════════════
+rules_version = '2';
+// Firestore Security Rules — Free Fire Tournament App
+// (user app + admin panel + staff panel — একই Firebase project)
+//
+// মূল নীতি:
+//  • public ডেটা (tournaments, banners, results) সবাই পড়তে পারবে
+//  • join flow-এর lock/counter লেখা user নিজে করবে — কিন্তু কঠোর সীমার ভেতর
+//    (শুধু নির্দিষ্ট ফিল্ড, শুধু নিজের ডকুমেন্ট, কাউন্টার ±1)
+//  • টাকা-পয়সার ডকুমেন্ট (withdrawal, wallet) user শুধু নিজেরটা দেখবে
+//  • কেউ নিজে নিজে role='admin' বা role='staff' বসাতে পারবে না
+//
+// Deploy: Firebase Console → Firestore Database → Rules ট্যাবে পেস্ট করে Publish
+// (অথবা কম্পিউটার থেকে: firebase deploy --only firestore:rules)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isStaff() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff'
+        && request.auth.token.email_verified == true;
+    }
+    // v14 (H4): ban enforcement in rules. The app signs a banned user out
+    // of the UI, but the Auth token stays valid, so SDK writes were still
+    // possible. A banned profile carries isBanned:true (admin ban flow)
+    // and/or status:'banned' (app.js checks both) — either one blocks.
+    // NOT applied to users create (doc doesn't exist yet) or the
+    // registeredUIDs signup claim path. Any get() error fails CLOSED.
+    function isNotBanned() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isBanned', false) != true
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('status', '') != 'banned';
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    // শুধু নির্দিষ্ট ফিল্ডগুলো বদলানো যাবে (বাকি সব আগের মতোই থাকতে হবে)
+    function onlyKeys(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    // কাউন্টার এক ধাপ (±1) বা অপরিবর্তিত — seat reservation-এর জন্য যথেষ্ট,
+    // কিন্তু কেউ ইচ্ছামতো সংখ্যা বসাতে পারবে না
+    function stepDelta(oldV, newV) {
+      return newV == oldV || newV == oldV + 1 || newV == oldV - 1;
+    }
+    // v12 (AUD-007): counter INTEGRITY — stepDelta alone still let any
+    // signed-in user walk the counters ±1 per write and set filledPlayers
+    // to anything. Now, WHEN filledPlayers / filledSlots change, they must
+    // stay consistent with filledTeams (filledSlots == filledTeams;
+    // filledPlayers == filledTeams × playersPerTeam). The free-join
+    // transaction and staff confirm both write exactly this shape.
+    // Updates that don't touch those fields (e.g. staff reject touching
+    // only pendingTeams) are not re-validated against legacy data.
+    // (a) reverted 2026-10-25: the shapedTeamCreate() helper lived here
+    // and was deleted with the owner veto — team create is open again
+    // (see the tournamentTeams rule below).
+    function counterGuard() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return (!changed.hasAny(['filledPlayers'])
+              || request.resource.data.filledPlayers
+                 == request.resource.data.filledTeams * request.resource.data.get('playersPerTeam', 1))
+          && (!changed.hasAny(['filledSlots'])
+              || request.resource.data.filledSlots == request.resource.data.filledTeams);
+    }
+
+    // ── Users ──
+    match /users/{uid} {
+      // v11 (A1): owner/admin/staff only. আগে isSignedIn() ছিল — যেকোনো
+      // logged-in user অন্যের email/ffUID/balance পড়তে পারত। User app
+      // এখন শুধু নিজের doc পড়ে; leaderboard published
+      // leaderboard/current doc থেকে আসে (live users fallback v7.6-এ
+      // সরানো হয়েছে)।
+      allow read: if isOwner(uid) || isAdmin() || isStaff();
+      // v11 (A1): create শুধু owner; role admin/staff নয়; টাকার তিনটা
+      // counter-ই 0 দিয়ে শুরু (user-app register + admin 'Create Admin
+      // Account' দুটো write-ই হুবহু এটা করে — যাচাই করা)। .get(...,0)
+      // ব্যবহার করা হলো যাতে field বাদ গেলেও (মানে 0) rule error না হয়,
+      // কিন্তু non-zero বসালেই deny।
+      allow create: if isOwner(uid)
+        && (!('role' in request.resource.data)
+            || (request.resource.data.role != 'admin' && request.resource.data.role != 'staff'))
+        && request.resource.data.get('walletBalance', 0) == 0
+        && request.resource.data.get('totalEarnings', 0) == 0
+        && request.resource.data.get('totalWins', 0) == 0;
+      // v11 (A1): owner শুধু এই ফিল্ডগুলো বদলাতে পারবে — user app-এর
+      // প্রতিটা আসল write অডিট করে (account-settings name,
+      // profile-photo photoURL, join-flow joinedTournaments arrayUnion,
+      // updatedAt)। walletBalance/totalEarnings/totalWins/role console
+      // থেকে নিজে বদলানো যাবে না। admin সব ফিল্ড; staff শুধু
+      // walletBalance (approve-তে ডিডাক্ট) — আগের মতোই।
+      allow update: if isAdmin()
+        // v14 (W1 / AUD-004 minimal form): staff may only DECREASE a
+        // balance (approve deducts). A staff write that RAISES a balance
+        // is now denied — the full staffApprovals-doc pattern needs a
+        // staff-panel rework and is out of this round's scope.
+        || (isStaff() && onlyKeys(['walletBalance'])
+            && request.resource.data.walletBalance <= resource.data.get('walletBalance', 0))
+        || (isOwner(uid) && onlyKeys(['name', 'photoURL', 'joinedTournaments', 'updatedAt']));
+      allow delete: if isAdmin();
+      // প্রত্যেক user-এর নিজের notification inbox
+      match /notifications/{notifId} {
+        // v10.3: admin/staff-কেও read দিতে হবে — Delete User ফ্লো user-এর
+        // notification গুলো লিস্ট করে তারপর batch-এ মুছে; read owner-only
+        // থাকলে permission-denied এসে পুরো delete fail হচ্ছিল।
+        allow read: if isOwner(uid) || isAdmin() || isStaff();
+        // v10: user app নিজের inbox-এ লেখে — tournament reminder
+        // (notifications.service.js) আর "payment submitted" নোট
+        // (payment.service.js)। শুধু নিজের inbox, তাই cross-user spam অসম্ভব।
+        // v12: admin/staff-ও create পারবে — admin panel অনেক screen থেকে
+        // অন্য user-এর inbox-এ notification লেখে (send notification, room
+        // publish, confirm/reject, reminders); owner-only create সেগুলো
+        // deny করত (read/update/delete-এ admin/staff আগেই ছিল)।
+        allow create: if isOwner(uid) || isAdmin() || isStaff();
+        // v10: owner শুধু read ফ্ল্যাগ বদলাতে পারবে (mark-as-read);
+        // system নোটিফিকেশন (approve/reject) পাঠায় admin/staff।
+        allow update: if isAdmin() || isStaff()
+          || (isOwner(uid) && onlyKeys(['read']));
+        allow delete: if isAdmin() || isStaff();
+      }
+    }
+
+    // ── Tournaments (public পড়া) ──
+    match /tournaments/{tid} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      // v10: join transaction user হয়ে চলে — seat counter (±1) সরাতে হয়;
+      // expiry sweep pendingTeams −1 করে; staff confirm −1/+1 করে।
+      // শুধু কাউন্টার ফিল্ড, এক ধাপ, কখনো negative নয়।
+      allow update: if isAdmin()
+        // v14 (H4): plain-user counter branch now requires not-banned;
+        // staff branch unchanged (see header note (j)).
+        || ((isStaff() || (isSignedIn() && isNotBanned()))
+            && onlyKeys(['filledTeams', 'filledSlots', 'filledPlayers', 'pendingTeams', 'freedSlots', 'updatedAt'])
+            // v13 (AUD-024): freedSlots শুধু ছোট হতে পারে (join তার
+            // নেওয়া slot arrayRemove করে) — কেউ নিজে থেকে slot
+            // ঢুকিয়ে নিতে পারবে না; admin branch-এ এই সীমা নেই।
+            && request.resource.data.get('freedSlots', []).size() <= resource.data.get('freedSlots', []).size()
+            // v10: .get(field, 0) — পুরনো tournament doc-এ ফিল্ড না থাকলেও
+            // rule error না হয়ে 0 ধরে নেবে
+            && stepDelta(resource.data.get('filledTeams', 0), request.resource.data.filledTeams)
+            && stepDelta(resource.data.get('filledSlots', 0), request.resource.data.filledSlots)
+            && stepDelta(resource.data.get('pendingTeams', 0), request.resource.data.pendingTeams)
+            && request.resource.data.filledTeams >= 0
+            && request.resource.data.filledSlots >= 0
+            && request.resource.data.pendingTeams >= 0
+            && request.resource.data.filledPlayers >= 0
+            && counterGuard());
+    }
+
+    // ── Room credentials ──
+    match /roomCredentials/{tid} {
+      // v13 (AUD-002 FIXED): admin panel publish-এর সময় এখন
+      // participantUids (confirmed roster-এর Firebase UID array) লেখে,
+      // hide/save করলে খালি করে দেয়। তাই শুধু participant-রাই পড়তে
+      // পারে; লিস্ট না থাকা (legacy) doc-এর ক্ষেত্রে আগের মতো
+      // যেকোনো signed-in user পড়তে পারে।
+      // ⚠️ Admin-রা কখনো roomId/password public tournaments ডকুমেন্টে
+      // রাখবে না — শুধু এখানে।
+      // FIX (2026-10-25, BUILD 20, money C2): v14 had no admin branch —
+      // the admin room sheet could not read published rooms (blank fields,
+      // blank save could wipe live credentials). Admin already writes here.
+      allow read: if isAdmin() || (isSignedIn()
+        && (!('participantUids' in resource.data) || request.auth.uid in resource.data.participantUids));
+      allow write: if isAdmin();
+    }
+
+    // ── Tournament results (public পড়া, শুধু admin লিখবে) ──
+    match /tournamentResults/{tid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Result posters (v13, নতুন Admin Result টুল) ──
+    // Admin আপলোড করা poster/ছবি — সবাই পড়তে পারবে (user app-এর
+    // Results পেজ), লিখতে পারবে শুধু admin (upload/edit/delete)।
+    match /resultPosts/{postId} {
+      allow read: if true;
+      // v14 (W4 rules part): when imageUrl is present it must be https
+      // (admin uploads are Cloudinary https). Text-only posts (no
+      // imageUrl) still allowed. Delete stays admin-only and is split
+      // out — request.resource is null on delete, so the shape check
+      // must not run there.
+      allow create, update: if isAdmin()
+        && (!('imageUrl' in request.resource.data)
+            || (request.resource.data.imageUrl is string
+                && request.resource.data.imageUrl.matches('^https://.*')));
+      allow delete: if isAdmin();
+    }
+
+    // ── Teams / Join requests ──
+    match /tournamentTeams/{teamId} {
+      allow read: if isSignedIn();
+      // v14 REVERTED 2026-10-25 (owner veto): back to v13's open form —
+      // exactly as first decided for AUD-001 (2026-10-24). Join stays
+      // manual-form only: DUO +1 teammate name/UID, SQUAD +3.
+      allow create: if isSignedIn();
+      allow update: if isAdmin()
+        // v10: captain নিজের team-এর নাম বদলাতে পারবে (Matches → Edit Name)
+        // v14 (F11): rename requires the team UNLOCKED and the tournament
+        // still upcoming — a locked/confirmed team's name is its identity
+        // in results and room assignments, and post-start renames were a
+        // griefing vector. Client (matches.js) enforces the same two
+        // conditions before showing the button.
+        || (isSignedIn()
+            && resource.data.captainUserId == request.auth.uid
+            && resource.data.get('locked', false) != true
+            && get(/databases/$(database)/documents/tournaments/$(resource.data.tournamentId)).data.get('status', 'upcoming') == 'upcoming'
+            && onlyKeys(['teamName', 'updatedAt']))
+        // v10: owner নিজের team-এ UPI payment proof submit করবে
+        // (paymentStatus সবসময় 'pending'-ই সেট হয়)
+        // v14 (F10 rules part): OLD paymentStatus must be 'unpaid' — a
+        // rejected team can no longer be resubmitted as pending at rules
+        // level (the service throws first; this is the backstop).
+        || (isSignedIn()
+            && resource.data.captainUserId == request.auth.uid
+            && resource.data.paymentStatus == 'unpaid'
+            && request.resource.data.paymentStatus == 'pending'
+            && onlyKeys(['paymentId', 'transactionId', 'paymentStatus', 'updatedAt']))
+        // v10: expiry sweep — যেকোনো signed-in user মেয়াদোত্তীর্ণ unpaid
+        // pending-কে 'expired' করতে পারবে (seat release হয় counter rule দিয়ে)
+        || (isSignedIn()
+            && resource.data.status == 'pending'
+            && resource.data.paymentStatus == 'unpaid'
+            && 'expiresAt' in resource.data
+            && request.time > resource.data.expiresAt
+            && request.resource.data.status == 'expired'
+            && onlyKeys(['status', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+    match /joinRequests/{reqId} {
+      // v12 (AUD-009): was readable by ANY signed-in user (full legacy join
+      // history enumerable). Now owner/admin/staff only — the user app only
+      // ever reads its own (matches.js filters userId == uid).
+      allow read: if isAdmin() || isStaff()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      // v14 (M6): create is now admin-only — the user app NEVER creates
+      // joinRequests (reads only, for the legacy Matches/details
+      // fallback display), and the admin panel only UPDATES existing
+      // ones. This closes forged legacy requests polluting victims'
+      // Matches cards and roster rows.
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    // ── Captain lock (duplicate join ঠেকায়) ──
+    match /tournamentCaptains/{docId} {
+      // v12 (AUD-009): was PUBLIC read (true) — leaked every captain's
+      // Firebase UID unauthenticated. The app only reads its own lock
+      // (details live-status get + matches history query by captainUserId).
+      allow get: if isAdmin() || isStaff()
+        || (isSignedIn() && (resource == null || resource.data.captainUserId == request.auth.uid));
+      allow list: if isAdmin() || isStaff()
+        || (isSignedIn() && resource.data.captainUserId == request.auth.uid);
+      // v12 (AUD-008): the doc ID must END with the caller's own uid.
+      // Before, the field check passed with the ATTACKER's uid inside a doc
+      // named {tid}_{VICTIM uid} — forging the victim's captain lock and
+      // blocking their join. Binding the deterministic ID closes that.
+      // v14 (F12): status is constrained — only the two values the join
+      // txns write (free → confirmed, paid → pending). A forged lock in
+      // any other status is denied.
+      allow create: if isAdmin() || isStaff()
+        || (isSignedIn()
+            && request.resource.data.captainUserId == request.auth.uid
+            && request.resource.data.status in ['pending', 'confirmed']
+            && docId.matches('.*_' + request.auth.uid + '$'));
+      allow update: if isAdmin()
+        // v10: expiry sweep — lock release. Team doc transaction-এর ভেতর
+        // তখনো 'pending' দেখাতে পারে, তাই rule সরাসরি মেয়াদের শর্ত যাচাই করে।
+        || (isSignedIn()
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'rejected'
+            && onlyKeys(['status', 'updatedAt'])
+            && 'teamId' in resource.data
+            && get(/databases/$(database)/documents/tournamentTeams/$(resource.data.teamId)).data.paymentStatus == 'unpaid'
+            && get(/databases/$(database)/documents/tournamentTeams/$(resource.data.teamId)).data.expiresAt < request.time)
+        // v14 (F7 rules part): REJOIN after reject — admin reject leaves
+        // this lock 'rejected', and the join txn's full-doc set matched
+        // neither branch above, so v13 DENIED every paid rejoin. Now the
+        // lock's own captain may overwrite it with a fresh pending /
+        // confirmed lock for the SAME tournament. (Free kick deletes the
+        // lock, so free rejoin goes through create.)
+        || (isSignedIn()
+            && resource.data.captainUserId == request.auth.uid
+            && resource.data.status == 'rejected'
+            && request.resource.data.captainUserId == request.auth.uid
+            && request.resource.data.tournamentId == resource.data.tournamentId
+            && request.resource.data.status in ['pending', 'confirmed']);
+      allow delete: if isAdmin();
+    }
+    // ── Player UID locks (cross-team duplicate UID ঠেকায়) ──
+    match /tournamentPlayerUIDs/{docId} {
+      // v10: join transaction-এর duplicate check-এর জন্য get() লাগে
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      // v12 (AUD-008): doc ID must equal {tournamentId}_{ffUID} from the
+      // payload, so a lock can't be planted under a mismatched identity.
+      // (Residual, documented: a determined attacker can still lock an
+      // arbitrary FF UID under their OWN captaincy — full prevention needs
+      // a server-side check; the captain-lock binding above stops the
+      // worst case, forging another user's own lock.)
+      allow create: if isAdmin() || isStaff()
+        || (isSignedIn()
+            && request.resource.data.captainUserId == request.auth.uid
+            && docId == request.resource.data.tournamentId + '_' + request.resource.data.ffUID);
+      allow update: if isAdmin()
+        // v10: expiry sweep — captain lock-এর মতোই মেয়াদের শর্তে release
+        || (isSignedIn()
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'rejected'
+            && onlyKeys(['status', 'updatedAt'])
+            && 'teamId' in resource.data
+            && get(/databases/$(database)/documents/tournamentTeams/$(resource.data.teamId)).data.paymentStatus == 'unpaid'
+            && get(/databases/$(database)/documents/tournamentTeams/$(resource.data.teamId)).data.expiresAt < request.time)
+        // v14 (F7 rules part): REJOIN after reject — reject leaves UID
+        // locks 'rejected' (merge), and the join txn's full-doc set was
+        // denied by v13. The lock's own captain may now overwrite it with
+        // a fresh pending / confirmed lock for the SAME tournament + UID.
+        || (isSignedIn()
+            && resource.data.status == 'rejected'
+            && resource.data.captainUserId == request.auth.uid
+            && request.resource.data.captainUserId == request.auth.uid
+            && request.resource.data.tournamentId == resource.data.tournamentId
+            && request.resource.data.ffUID == resource.data.ffUID
+            && request.resource.data.status in ['pending', 'confirmed'])
+        // v14 (F2 rules part): SQUAT OVERWRITE — the join txn (2026-10-25
+        // fix) overwrites a UID lock whose team is DEAD (doc missing, or
+        // status rejected/expired). Teamless locks have NO branch here —
+        // the code blocks them too, and only an admin delete clears them.
+        || (isSignedIn()
+            && 'teamId' in resource.data
+            && request.resource.data.captainUserId == request.auth.uid
+            && request.resource.data.tournamentId == resource.data.tournamentId
+            && request.resource.data.ffUID == resource.data.ffUID
+            && request.resource.data.status in ['pending', 'confirmed']
+            && (!exists(/databases/$(database)/documents/tournamentTeams/$(resource.data.teamId))
+                || get(/databases/$(database)/documents/tournamentTeams/$(resource.data.teamId)).data.get('status', '') in ['rejected', 'expired']));
+      allow delete: if isAdmin();
+    }
+    // ── Free Fire UID রেজিস্ট্রি (signup-এ ডুপ্লিকেট FF UID ঠেকায়) ──
+    // user app (services/auth.service.js): signup transaction-এর ভেতর
+    // registeredUIDs/{ffUID} doc বানায় { userId, email, registeredAt } ফিল্ডসহ,
+    // আগে get() করে existence চেক করে। তাই:
+    //  • get (একটা doc পড়া): login করা user — existence চেকের জন্য
+    //  • list (সব স্ক্যান): শুধু admin (FF UID→email ম্যাপিং লিক হবে না)
+    //  • create: শুধু নিজের auth uid দিয়ে (userId == request.auth.uid)
+    //  • update/delete: শুধু admin
+    match /registeredUIDs/{ffUid} {
+      allow get: if isSignedIn() || isAdmin();
+      allow list: if isAdmin();
+      // v12 (AUD-018): the claim must match the caller's OWN profile doc —
+      // the register flow writes users/{uid} (with ffUID) FIRST, then claims.
+      // Before, any signed-in user could claim ANY FF UID directly and
+      // squat other players' UIDs before they signed up.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('ffUID', '') == ffUid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Payment requests (join fee) ──
+    match /paymentRequests/{reqId} {
+      // v12 (AUD-003): was read+create open to ANY signed-in user — every
+      // player's UTR + email was enumerable, forged 'approved' docs could
+      // be planted, and a victim's UTR doc ID could be squatted so their
+      // real submission failed. Now: read = owner/admin/staff only; create
+      // is shaped to EXACTLY what payment.service.js writes (own uid,
+      // status 'pending', deterministic doc ID 'trx_' + transactionId,
+      // amount == entryFee > 0, review fields null).
+      // get is split from list: the payment flow checks a UTR doc's
+      // EXISTENCE inside its transaction — for a missing doc resource is
+      // null, and dereferencing it would deny the check and break every
+      // first-time payment. Existence of a missing doc reveals nothing.
+      allow get: if isAdmin() || isStaff()
+        || (isSignedIn() && (resource == null || resource.data.userId == request.auth.uid));
+      allow list: if isAdmin() || isStaff()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isNotBanned()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.transactionId is string
+        && request.resource.data.transactionId.size() >= 8
+        && reqId == 'trx_' + request.resource.data.transactionId
+        && request.resource.data.entryFee is number
+        && request.resource.data.entryFee > 0
+        && request.resource.data.amount == request.resource.data.entryFee
+        && request.resource.data.get('reviewedBy', null) == null
+        && request.resource.data.get('reviewedAt', null) == null
+        && request.resource.data.get('rejectionReason', null) == null
+        && request.resource.data.keys().hasOnly(['paymentId', 'tournamentId', 'tournamentName', 'teamId', 'teamName', 'userId', 'userName', 'userEmail', 'entryFee', 'amount', 'transactionId', 'paymentMethod', 'status', 'submittedAt', 'reviewedAt', 'reviewedBy', 'rejectionReason']);
+      allow update, delete: if isAdmin();
+    }
+    // Transaction-ID ডুপ্লিকেট ঠেকানোর রেজিস্ট্রি
+    match /usedTransactions/{txnId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── Withdrawals (staff approve/reject করে) ──
+    match /withdrawalRequests/{reqId} {
+      allow read: if isAdmin() || isStaff()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      // v11 (A1): create কঠোর — নিজের uid, status ঠিক 'pending',
+      // amount সংখ্যা > 0, resolvedAt থাকবে না, আর key শুধু user app
+      // আসলে যা লেখে (withdrawal.service.js অডিট করে: ffUid সহ)।
+      // আগে শুধু userId মিললেই status:'approved' দিয়েও বানানো যেত।
+      allow create: if isSignedIn()
+        && isNotBanned()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        // v14 (W11 rules part): the settings/withdrawal minAmount (₹1
+        // default when the doc/field is missing) is now enforced in
+        // rules, not only in client code.
+        && request.resource.data.amount >= get(/databases/$(database)/documents/settings/withdrawal).data.get('minAmount', 1)
+        && !('resolvedAt' in request.resource.data)
+        && request.resource.data.keys().hasOnly(['userId', 'userName', 'ffUid', 'amount', 'method', 'phoneNumber', 'upiId', 'status', 'requestedAt']);
+      // approve/reject: admin বা staff
+      allow update, delete: if isAdmin() || isStaff();
+    }
+
+    // ── Withdrawal pending-cap counter (v12, AUD-013) ──
+    // withdrawal.service.js keeps the user's withdrawal request IDs here
+    // and re-reads them INSIDE the create transaction, so the max-3-pending
+    // and total-pending ≤ balance caps hold even under parallel submits.
+    // Only the owner writes it; admin/staff can read for support.
+    match /withdrawalCounters/{uid} {
+      allow read: if isOwner(uid) || isAdmin() || isStaff();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.ids is list
+        && request.resource.data.ids.size() <= 10;
+      allow delete: if isAdmin();
+    }
+
+    // ── Wallet ledger ──
+    match /walletTransactions/{txnId} {
+      allow read: if isAdmin() || isStaff()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      // v11 (A1): create শুধু admin/staff। User app কখনো ledger entry
+      // লেখে না (grep যাচাই — wallet.service.js শুধু নিজের history পড়ে);
+      // আগে যেকোনো signed-in user নিজের নামে ভুয়া ledger বানাতে পারত।
+      // আসল লেখক: admin approve (withdraw_<id>), prize (results.js),
+      // manual edit (users.js), staff approve — সবাই admin/staff।
+      allow create: if isAdmin() || isStaff();
+      // v14 (W5): update/delete admin-only — staff must never rewrite or
+      // erase a ledger entry after the fact (audit trail).
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Staff activity log ──
+    match /staffActivityLogs/{logId} {
+      allow read, create: if isStaff() || isAdmin();
+      // audit trail — শুধু admin মুছতে পারবে; staff নিজের লগ মুছতে পারবে না
+      allow delete: if isAdmin();
+    }
+
+    // ── Admin activity log (Activity Log screen, v9) ──
+    // শুধু admin পড়তে/লিখতে/মুছতে পারবে (staff বা user নয়)
+    match /adminActivityLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Published leaderboard (v6.1 — admin publishes once daily) ──
+    // User app reads ONE doc per view instead of 50 user docs.
+    // Written only by the admin panel's "Publish Leaderboard" action.
+    match /leaderboard/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Persistent teams — "My Team" (v7) ──
+    // One saved squad roster per user. The team is a TEMPLATE: tournament
+    // entries snapshot the roster, so deleting a team never touches
+    // tournamentTeams docs. Only the captain can write.
+    match /teams/{teamId} {
+      // v12: the My Team feature was REMOVED from the user app (manual
+      // entry only). Reads scoped to the owner so old saved rosters are
+      // not enumerable by other accounts.
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.captainUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.captainUid == request.auth.uid
+        && request.resource.data.members.size() <= 3;
+      allow update, delete: if isSignedIn()
+        && resource.data.captainUid == request.auth.uid;
+    }
+
+    // ── Player reports (v7) ──
+    // Users file reports (no auto-ban — admin reviews). Reporter reads own;
+    // admin reads/updates all.
+    match /playerReports/{reportId} {
+      // v14 (H4): banned users cannot file reports via SDK either.
+      allow create: if isSignedIn()
+        && isNotBanned()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.reportedFFUID is string
+        && request.resource.data.status == 'pending';
+      allow read: if isSignedIn()
+        && (resource.data.reporterUid == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Banners / Game modes (public পড়া, admin লিখবে) ──
+    match /banners/{bid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /gameModes/{mid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // ── Support contacts (Help & Support — public পড়া, admin লিখবে) ──
+    match /supportContacts/{cid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Global notifications / admin inbox ──
+    match /notifications/global/items/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /adminNotifications/{nid} {
+      allow read, write: if isAdmin();
+    }
+    // Admin panel-এর পাঠানো notification-এর লগ
+    match /notifLog/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── App cache-bust (v15, dashboard H1) ──
+    // Admin touchCache() writes per-type timestamps here so the user app
+    // knows its cached banners/modes/posters/settings are stale. The doc
+    // holds ONLY timestamps — no PII, no secrets — so public read is safe.
+    // Before v15 no rule existed: admin writes were denied (stale user
+    // caches) and the user app's sync read was denied (false backend-
+    // failure dialog on every session).
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Settings (v11 A1) ──
+    // আগে match /settings/{docId} { allow read: if true } wildcard ছিল।
+    // Firestore rules OR হয় — specific match wildcard-কে আটকায় না, তাই
+    // settings/notifications (OneSignal REST API key) logged-out অবস্থায়ও
+    // যে কেউ পড়তে পারত। এখন wildcard নেই; প্রতিটা doc আলাদা করে।
+    // সব write admin-only (staffPanel heartbeat update ব্যতিক্রম, নিচে)।
+    // OneSignal key থাকে settings/notifications-এ — শুধু admin
+    match /settings/notifications {
+      allow read, write: if isAdmin();
+    }
+    // Staff Panel heartbeat: staff শুধু এই ২টা ফিল্ড আপডেট করতে পারবে
+    // (isEnabled বদলানোর ক্ষমতা শুধু admin-এর)
+    match /settings/staffPanel {
+      // v14 (L3): the user app never reads this (staff heartbeat only);
+      // lastActiveStaffEmail no longer leaks to logged-out readers.
+      allow read: if isAdmin() || isStaff();
+      // FIX (2026-10-25, BUILD 20, security H1): v14 allowed only staff
+      // heartbeat updates, so the admin toggle (isEnabled/lastToggledAt/
+      // lastToggledBy) was DENIED once the doc existed. Admin update added;
+      // staff stays heartbeat-only.
+      allow update: if isAdmin() || (isStaff()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['lastActiveAt', 'lastActiveStaffEmail']));
+      allow create, delete: if isAdmin();
+    }
+    // User app যেগুলো পড়ে (অডিট করা): helpSupport (help-support.js),
+    // maintenance (settings.service.js listener), payment
+    // (payment.service.js), termsAndConditions (terms.js), withdrawal
+    // (withdrawal transaction + min-amount)। সব public read, admin write —
+    // আগের wildcard-এর আচরণই, শুধু আর notifications-কে টানে না।
+    match /settings/helpSupport {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /settings/maintenance {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /settings/payment {
+      // v14 (L3): payment settings are only read on the login-gated
+      // payment page — logged-out read is no longer needed.
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /settings/termsAndConditions {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /settings/withdrawal {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // v14 (m): Staff Panel OneSignal App ID — staff panel reads
+    // oneSignalAppId from settings/publicConfig, its only source (the
+    // in-code fallback is empty). Public read is safe: the App ID is
+    // already inside the client bundles. The REST API key stays in
+    // settings/notifications (admin-only) — untouched.
+    match /settings/publicConfig {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

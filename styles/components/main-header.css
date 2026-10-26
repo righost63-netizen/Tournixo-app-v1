@@ -1,0 +1,131 @@
+/* Shared main-page header — the same markup and visual rules as Home.
+   Loaded only by Home, Tournaments, Matches, Wallet and Profile. */
+.home-header {
+    padding: calc(var(--safe-top) + 8px) 18px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 11px;
+    flex-shrink: 0;
+    background: var(--bg2);
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    border-bottom: 0.5px solid var(--border);
+}
+
+.home-header > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+}
+
+.home-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    background: linear-gradient(155deg, #2A2E36, #15171B);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 15px;
+    color: #C7FF3E;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.greeting-text {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+
+.greeting-sub {
+    font-size: 13px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-top: 1px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.home-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.wallet-preview {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 8px 12px;
+    font-weight: 700;
+    font-size: 13.5px;
+    white-space: nowrap;
+}
+
+.wallet-preview svg {
+    width: 14px;
+    height: 14px;
+}
+
+.wallet-preview span:last-child {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #C7FF3E;
+}
+
+.home-header .icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 100px;
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+.home-header .icon-btn svg {
+    width: 17px;
+    height: 17px;
+    stroke: var(--text);
+}
+
+.home-header .icon-btn .tab-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 4px;
+    border-radius: 100px;
+    background: #FF4D4D;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* A page title bar immediately below the shared header must not repeat the
+   status-bar inset that the shared header has already consumed. */
+body:not([data-page="home"]) .home-header + .top-nav {
+    padding-top: 12px;
+}

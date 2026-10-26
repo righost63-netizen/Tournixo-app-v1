@@ -1,0 +1,82 @@
+v8.1 CHANGES OVER v8.0 (read this first):
+- My Team is NO LONGER inline in Profile. Profile has one "My Team" row;
+  tap it to open the separate My Team page (pages/my-team.html) to
+  create/edit the team. Join gates (free + paid) now redirect to My Team.
+- Brand header on ALL 5 tabs (Home, Tournaments, Matches, Wallet,
+  Profile): avatar + big "Tournixo" + "FREE FIRE" below. "Hey, name /
+  Tournixo Arena" is gone from every tab header (your name still shows
+  inside the Profile body).
+- Logo: images/tournixo-logo.png is now IN the zip (regenerated from
+  your supplied brand image, 512px), used by login/register/splash with
+  an automatic fallback to icons/icon-192.png. Icons also regenerated
+  from the same file. If login still shows blank on localhost, hard
+  refresh / clear site data — the v8.0 service worker cache is replaced
+  by tournixo-user-v8-1-2026-10-25 on activate.
+- Matches: every card now has a role + slot banner at the top:
+  captain = "তুমি এই টিমের Captain … Slot: #X", teammate = "তুমি
+  [Team]-এর হয়ে … জয়েন করেছো (Teammate) • Slot: #X". Slot comes from
+  the team doc, so it shows even when room credentials are captain-only.
+  HONEST LIMIT: Room ID/password still show only to the captain, because
+  the admin panel's publish writes participantUids = captain Firebase
+  UIDs only. A teammate's Room ID needs an admin-panel change (out of
+  this user-panel zip) — it is NOT faked here.
+- Tournaments page/card premium redesign (presentation only): title +
+  FREE/fee pill on one row, info in a single panel, slots bar now says
+  "X slots left" instead of repeating "Capacity: Players: x/y" twice,
+  active filter tab in lime, page subtitle. No filter/search/join logic
+  changed.
+- Rules: UNCHANGED from v15 (embedded file is byte-identical to
+  firestore-rules-v15-DEPLOY.txt). My Team needs no new rule.
+
+Tournixo User Panel v8.1 — Deploy Order (supersedes v8.0) (read before you publish)
+
+BASE: v7.8 patch2 FULL + BUILD 20 paired patch (banners/cache/notifications/sw)
++ icons from v7.7.3 + rules v15. This is NOT the v7.7.3 zip: deploying the
+old v7.7.3 zip over a v7.8 live site would roll back the new paid flow.
+
+1. FIRESTORE RULES — file firestore.rules in this zip IS rules v15
+   (byte-identical to firestore-rules-v15-DEPLOY.txt).
+   - If v15 is already live in Firebase Console: nothing to do here.
+     Republishing the same file is harmless.
+   - If older rules are live: paste this whole file and Publish.
+   - Do NOT paste any older rules file (v12/v14) over v15.
+   - Team feature needs NO new rule: teams/{uid} create already allows
+     captainUid == uid with members <= 3 (v15, unchanged).
+
+2. NETLIFY — deploy this zip flat (index.html at the root, same site
+   as before: tournixo.netlify.app).
+
+3. PHONE — hard refresh / clear site data once. Service-worker cache is
+   tournixo-user-v8-1-2026-10-25, so old cached code is auto-cleaned on
+   activate, but clear-site-data is still the reliable way to pick up
+   the new icons and the fixed login logo.
+
+4. DEVICE TESTS (do these before announcing launch):
+   a. Login screen shows the Tournixo logo tile (was blank: logo file
+      was missing; now it uses icons/icon-192.png).
+   b. Home header shows avatar + "Tournixo" + "Free Fire" (not "Hey, name").
+   c. Profile → My Team: save a team (Team Name + Mate 1), then edit it.
+   d. DUO tournament without a team → toast + Profile opens at My Team.
+      With a team → join shows the saved team, no manual UID typing.
+   e. SQUAD without all 3 mates → toast asking for the missing mates.
+   f. Paid DUO/SQUAD → payment page shows the saved roster read-only,
+      then submit → admin-pending request.
+   g. SOLO join unchanged (profile UID, no team needed).
+   h. Profile → Notifications ON on Netlify: on slow network wait up to
+      10s. If it still fails, toggle goes OFF (retry by tapping again)
+      instead of sticking ON with a "failed" popup.
+   i. Free join, paid join → admin confirm, withdrawal, room ID for a
+      confirmed vs a non-joined user, Results poster.
+
+NOT DONE HERE (honest scope):
+- No live Firebase test was possible in this environment (no credentials):
+  syntax + static checks only. The device tests above are still required.
+- assetlinks.json SHA-256 is still the placeholder — irrelevant for
+  Capacitor (see CAPACITOR.md), required only for the old TWA route.
+- Capacitor APK itself is NOT built in this zip — you build it with the
+  steps in CAPACITOR.md. Native push in the APK needs its own plugin
+  setup (also in CAPACITOR.md).
+- 2026-10-25 manual-only join decision is SUPERSEDED by your 2026-10-25
+  evening instruction: DUO/SQUAD now REQUIRE a Profile team. If you want
+  manual entry back, say so and the gate can be removed without touching
+  the team feature itself.

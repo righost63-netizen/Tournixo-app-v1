@@ -1,0 +1,481 @@
+/* ══════════════════════════════════════
+     FILTER TABS
+  ══════════════════════════════════════ */
+.filter-tabs {
+    display: flex;
+    gap: 0;
+    margin: 0 16px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+}
+
+.filter-tab {
+    flex: 1;
+    padding: 8px;
+    border-radius: var(--radius-xs);
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 44px;
+}
+
+.filter-tab.active {
+    background: rgba(199, 255, 62, 0.12) !important;
+    color: #C7FF3E !important;
+}
+
+/* ══════════════════════════════════════
+     TOURNAMENT CARD
+  ══════════════════════════════════════ */
+.tournament-card {
+    margin: 0 16px 16px;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #111827;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    animation: fadeInUp 0.3s ease both;
+    transition: transform 0.15s ease;
+    position: relative;
+}
+
+.tournament-card:active {
+    transform: scale(0.983);
+}
+
+/* ══════════════════════════════════════
+     BANNER
+  ══════════════════════════════════════ */
+.tournament-banner-wrap {
+    position: relative;
+    height: 160px;
+    overflow: hidden;
+    background: #0D1420;
+}
+
+.tournament-banner {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    display: block;
+}
+
+/* Dark gradient at bottom of banner */
+.tournament-banner-wrap::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(0,0,0,0.08) 0%,
+        rgba(0,0,0,0.55) 80%,
+        rgba(17,24,39,0.95) 100%
+    );
+    pointer-events: none;
+}
+
+/* No banner = no placeholder, just 0 height */
+.tournament-no-banner {
+    position: relative;
+    height: 0;
+    flex-shrink: 0;
+}
+
+/* When no banner, countdown sits inside body area */
+.tournament-no-banner .countdown-container {
+    position: relative;
+    top: unset;
+    left: unset;
+    display: inline-flex;
+    margin: 14px 16px 0;
+}
+
+/* ── Countdown pill (on banner) ── */
+.countdown-container {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 5px 12px;
+    border-radius: 100px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 0.5px solid rgba(255,255,255,0.15);
+    z-index: 5;
+}
+
+.timer-dot {
+    width: 6px;
+    height: 6px;
+    background: #FF453A;
+    border-radius: 50%;
+    animation: pulse 1s infinite;
+    flex-shrink: 0;
+}
+
+.timer-text {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #fff;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: #fff;
+}
+
+.live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #fff;
+    animation: pulse 1.2s infinite;
+    box-shadow: 0 0 8px rgba(255,255,255,0.9);
+    flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════
+     CARD BODY
+  ══════════════════════════════════════ */
+.tournament-body {
+    padding: 14px 16px 16px;
+}
+
+/* ── Title row ── */
+.tournament-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.tournament-title-row .tournament-title {
+    margin-bottom: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+.tournament-title-row .title-fee {
+    flex-shrink: 0;
+    margin-top: 0;
+}
+
+.tournament-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    overflow: hidden;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #FFFFFF;
+    letter-spacing: -0.3px;
+}
+
+/* ── Badge strip ── */
+.tournament-meta {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.tournament-meta::-webkit-scrollbar { display: none; }
+
+.badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.1);
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.05);
+    color: var(--text2);
+}
+
+.badge-mode {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.1);
+    color: var(--text2);
+}
+
+.badge-map {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.1);
+    color: var(--text2);
+}
+
+.badge-upcoming {
+    background: rgba(199,255,62,0.08);
+    border-color: rgba(199,255,62,0.25);
+    color: #C7FF3E;
+}
+
+.badge-ongoing {
+    background: var(--success-dim);
+    border-color: rgba(0,200,83,0.25);
+    color: var(--success);
+}
+
+.badge-completed {
+    background: rgba(142,142,147,0.08);
+    border-color: rgba(142,142,147,0.18);
+    color: var(--text2);
+}
+
+.badge-cancelled {
+    background: var(--error-dim);
+    border-color: rgba(255,69,58,0.22);
+    color: var(--error);
+}
+
+.badge-free {
+    background: #C7FF3E;
+    border-color: #C7FF3E;
+    color: #080808;
+    font-weight: 800;
+}
+
+.badge-paid {
+    background: rgba(199,255,62,0.10);
+    border-color: rgba(199,255,62,0.28);
+    color: #C7FF3E;
+}
+
+/* ══════════════════════════════════════
+     INFO BOXES — 4 separate cards
+  ══════════════════════════════════════ */
+.tournament-info {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 13px;
+}
+
+.info-item {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 10px 6px 9px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.info-label {
+    font-size: 9px;
+    color: var(--text3);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1;
+}
+
+.info-val {
+    font-size: 13px;
+    font-weight: 800;
+    color: #FFFFFF;
+    line-height: 1.15;
+}
+
+.info-val.gold { color: #FFD700; }
+.info-val.green { color: #3FD9A4; }
+
+/* ── Slots row ── */
+.slots-bar {
+    background: rgba(255,255,255,0.07);
+    border-radius: 10px;
+    height: 3px;
+    margin-bottom: 7px;
+    overflow: hidden;
+}
+
+.slots-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3FD9A4, #C7FF3E);
+    border-radius: 10px;
+    transition: width 0.5s ease;
+}
+
+.slots-fill.slots-hot {
+    background: linear-gradient(90deg, #FF9500, #FF453A);
+}
+
+.slots-text {
+    font-size: 12px;
+    color: var(--text2);
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* ══════════════════════════════════════
+     ACTION BUTTONS
+  ══════════════════════════════════════ */
+.card-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.card-actions .btn {
+    flex: 1;
+    padding: 13px 0;
+    border-radius: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    min-height: unset;
+    height: auto;
+    border: 1px solid rgba(255,255,255,0.1);
+    text-align: center;
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+}
+
+.card-actions .btn:active {
+    background: rgba(255,255,255,0.1);
+}
+
+.btn-join-card {
+    flex: 1;
+    background: linear-gradient(135deg, #CCFF33, #A8D900);
+    color: #080808;
+    border: none;
+    border-radius: 13px;
+    font-size: 14px;
+    font-weight: 900;
+    padding: 13px 0;
+    text-align: center;
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow:
+        0 5px 20px rgba(180,255,50,0.25),
+        0 1px 0 rgba(255,255,255,0.3) inset;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+    letter-spacing: 0.2px;
+}
+
+.btn-join-card:active {
+    transform: scale(0.97);
+    box-shadow: 0 2px 8px rgba(180,255,50,0.12);
+}
+
+.card-actions .btn-join-card {
+    flex: 1;
+}
+
+/* ══════════════════════════════════════
+     PAGE HEADER
+  ══════════════════════════════════════ */
+.tourn-page-header {
+    padding: calc(var(--safe-top) + 10px) 16px 14px;
+    background: var(--bg2);
+    border-bottom: 0.5px solid var(--border);
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    flex-shrink: 0;
+}
+
+.tourn-page-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.tourn-page-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tourn-page-title {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.5px;
+    line-height: 1;
+}
+
+.tourn-page-sub {
+    font-size: 12px;
+    color: var(--text3);
+    font-weight: 500;
+}
+
+.page-sub {
+    font-size: 12px;
+    color: var(--text2);
+    font-weight: 600;
+    margin-top: 1px;
+}
+
+/* ══════════════════════════════════════
+     INFO ICON
+  ══════════════════════════════════════ */
+.info-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text3);
+    margin-bottom: 1px;
+}
+
+/* ══════════════════════════════════════
+     BANNER COUNTDOWN — উপরে আলাদা strip
+     যাতে title ঢাকা না যায়
+  ══════════════════════════════════════ */
+
+/* Banner এর ভেতরে countdown — bottom-left */
+.banner-countdown-wrap {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 6;
+}
+
+.banner-countdown-wrap .countdown-container {
+    position: static;
+    top: unset;
+    left: unset;
+}
+
+/* Banner নেই — countdown একটা পাতলা strip হিসেবে দেখাবে */
+.card-countdown-strip {
+    padding: 8px 16px 0;
+}
+
+.card-countdown-strip .countdown-container {
+    position: static;
+    top: unset;
+    left: unset;
+    display: inline-flex;
+    border-radius: 100px;
+}

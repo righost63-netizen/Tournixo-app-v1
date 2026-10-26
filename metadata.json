@@ -1,0 +1,6 @@
+{
+  "name": "Tournixo",
+  "description": "Tournixo Free Fire Esports Tournament India Platform - Solo & Squad Tournaments, Wallet, Live Leaderboards & Prize Claims.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

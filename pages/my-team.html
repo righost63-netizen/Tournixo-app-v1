@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>My Team - Tournixo</title>
+    <link rel="stylesheet" href="../styles/global.css">
+    <link rel="stylesheet" href="../styles/components/toast.css">
+    <link rel="stylesheet" href="../styles/components/confirm-dialog.css">
+    <link rel="stylesheet" href="../styles/pages/my-team.css">
+    <link rel="stylesheet" href="../styles/theme.css">
+    <link rel="manifest" href="../manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png">
+    <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#080808">
+    <link rel="modulepreload" href="../scripts/app.js">
+    <link rel="modulepreload" href="../scripts/state.js">
+    <link rel="modulepreload" href="../scripts/cache.js">
+    <link rel="modulepreload" href="../firebase/firebase-init.js">
+</head>
+
+<body data-page="myTeam">
+    <div id="app">
+        <div id="screen-main" class="screen active">
+            <div class="page" style="min-height:100%;background:var(--bg);display:flex;flex-direction:column;">
+                <div class="top-nav" style="justify-content:flex-start;gap:14px;">
+                    <button class="back-btn" onclick="goBack('profile')">‹ Back</button>
+                    <h1>My Team</h1>
+                </div>
+                <div class="scroll-area">
+                    <div class="team-hero">
+                        <div class="team-hero-ic">🛡️</div>
+                        <div>
+                            <div class="team-hero-title">Your Squad, Ready to Play</div>
+                            <div class="team-hero-sub">DUO/SQUAD join-এর আগে এখানে team বানাও। Join-এর সময় আর হাতে UID টাইপ করতে হবে না।</div>
+                        </div>
+                    </div>
+                    <div class="team-card">
+                        <p id="team-status" class="team-status">Loading your team…</p>
+                        <label class="auth-label">Team Name <span style="color:var(--error)">*</span></label>
+                        <div class="input-group">
+                            <span class="input-icon">🛡️</span>
+                            <input id="team-name-input" type="text" maxlength="25" placeholder="Enter Team Name">
+                        </div>
+                        <label class="auth-label">Player 2 — IGN <span style="color:var(--error)">*</span></label>
+                        <div class="input-group">
+                            <span class="input-icon">👤</span>
+                            <input id="team-m1-name" type="text" maxlength="25" placeholder="Mate 1 Name (DUO-এর জন্য আবশ্যক)">
+                        </div>
+                        <label class="auth-label">Player 2 — Free Fire UID <span style="color:var(--error)">*</span></label>
+                        <div class="input-group">
+                            <span class="input-icon">🎯</span>
+                            <input id="team-m1-uid" type="number" placeholder="Mate 1 Gaming UID" inputmode="numeric">
+                        </div>
+                        <label class="auth-label">Player 3 — IGN</label>
+                        <div class="input-group">
+                            <span class="input-icon">👤</span>
+                            <input id="team-m2-name" type="text" maxlength="25" placeholder="Mate 2 Name (SQUAD-এর জন্য আবশ্যক)">
+                        </div>
+                        <label class="auth-label">Player 3 — Free Fire UID</label>
+                        <div class="input-group">
+                            <span class="input-icon">🎯</span>
+                            <input id="team-m2-uid" type="number" placeholder="Mate 2 Gaming UID" inputmode="numeric">
+                        </div>
+                        <label class="auth-label">Player 4 — IGN</label>
+                        <div class="input-group">
+                            <span class="input-icon">👤</span>
+                            <input id="team-m3-name" type="text" maxlength="25" placeholder="Mate 3 Name (SQUAD-এর জন্য আবশ্যক)">
+                        </div>
+                        <label class="auth-label">Player 4 — Free Fire UID</label>
+                        <div class="input-group">
+                            <span class="input-icon">🎯</span>
+                            <input id="team-m3-uid" type="number" placeholder="Mate 3 Gaming UID" inputmode="numeric">
+                        </div>
+                        <p class="team-note">DUO খেলতে Mate 1-ই যথেষ্ট, SQUAD খেলতে 3 জনই লাগবে। Teammate-দের মধ্যে যার এই অ্যাপে অ্যাকাউন্ট আছে, তার Matches পেজে এই টিমের হয়ে জয়েন + স্লট নম্বর দেখা যাবে।</p>
+                        <div id="team-locked-note" style="display:none; align-items:center; gap:10px; background:rgba(255,149,0,0.08); border:1px solid rgba(255,149,0,0.2); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+    <span style="font-size:18px;">🔒</span>
+    <div>
+        <div style="font-size:13px; font-weight:700; color:var(--warning);">Team Locked</div>
+        <div style="font-size:12px; color:var(--text2); margin-top:2px;">Edit করা যাবে না। পরিবর্তন করতে Delete করে নতুন team বানাও।</div>
+    </div>
+</div>
+<button class="btn btn-primary" id="team-save-btn" onclick="saveMyTeam()" style="width:100%; min-height:52px; margin-bottom:10px;">Save Team</button>
+                        <button class="btn btn-secondary" id="team-delete-btn" onclick="deleteMyTeam()" style="width:100%; min-height:52px;">Delete Team</button>
+                    </div>
+                    <div style="height:20px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="../scripts/my-team.js"></script>
+</body>
+
+</html>
